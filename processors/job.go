@@ -10,13 +10,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cbelsole/dsw/db"
 	"github.com/cbelsole/dsw/types"
 )
 
+type JobStore interface {
+	UpdateJob(*types.Job) error
+	GetJobs() ([]*types.Job, error)
+	GetPendingJobs() ([]*types.Job, error)
+	CreateJob(*types.Job) error
+}
+
 // Job is a processor responsible for enqueuing, running, and completing jobs
 type Job struct {
-	DB                    *db.DB
+	Store                 JobStore
 	WorkerNum, MaxRetries int
 }
 
@@ -33,7 +39,7 @@ func (j *Job) Start() error {
 	var err error
 	started.Do(func() {
 		var loadedJobs []*types.Job
-		loadedJobs, err = j.DB.GetPendingJobs()
+		loadedJobs, err = j.Store.GetPendingJobs()
 		if err != nil {
 			return
 		}
@@ -56,7 +62,7 @@ func (j *Job) Start() error {
 
 		go func() {
 			for job := range results {
-				if err := j.DB.UpdateJob(job); err != nil {
+				if err := j.Store.UpdateJob(job); err != nil {
 					log.Printf("error saving job %+v, error: %s\n", job, err)
 				} else {
 					log.Printf("processed job %+v\n", job)
@@ -74,7 +80,7 @@ func (j *Job) Start() error {
 
 // Enqueue adds a job to the pool
 func (j *Job) Enqueue(job *types.Job) error {
-	if err := j.DB.CreateJob(job); err != nil {
+	if err := j.Store.CreateJob(job); err != nil {
 		return err
 	}
 
@@ -130,7 +136,7 @@ func (j *Job) getJobs() []*types.Job {
 
 		log.Printf("checking job %+v\n", job)
 		// Remove completed jobs
-		if job.Sent || job.Try == -1 || job.Try >= j.MaxRetries {
+		if job.Sent || job.Try == -1 || job.Try > j.MaxRetries {
 			jobs.Delete(key)
 			processingJobs.Delete(key)
 			return true
