@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -105,7 +106,7 @@ func (j *Job) worker(id int, processing <-chan *types.Job, results chan<- *types
 			job.Try = -1
 		} else {
 			b, err := ioutil.ReadAll(resp.Body)
-			fmt.Println("body: ", string(b))
+			log.Printf("body: %v", string(b))
 			if err != nil {
 				job.Errors = append(job.Errors, fmt.Sprintf("error reading body %s", err))
 			}
@@ -116,6 +117,9 @@ func (j *Job) worker(id int, processing <-chan *types.Job, results chan<- *types
 				job.Errors = append(job.Errors, fmt.Sprintf("URI returned 400: %s", string(b)))
 				job.Try = -1
 			} else if resp.StatusCode >= 500 && resp.StatusCode <= 599 {
+				job.ExecuteAt = time.Now().Add(time.Second * time.Duration(math.Exp2(float64(job.Try))))
+				job.Errors = append(job.Errors, fmt.Sprintf("URI returned 500 level: %s", string(b)))
+				log.Printf("backing off: next retry for job %v at: %v\n", job.ID, job.ExecuteAt)
 				job.Try++
 			}
 
