@@ -40,7 +40,7 @@ func main() {
 	}
 
 	database := db.NewDB(d)
-	processor := processors.Job{DB: database, WorkerNum: 3, MaxRetries: 3}
+	processor := processors.Job{Store: database, WorkerNum: 3, MaxRetries: 3}
 	if err := processor.Start(); err != nil {
 		log.Fatal(err)
 	}
